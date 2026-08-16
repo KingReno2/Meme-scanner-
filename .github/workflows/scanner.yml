@@ -2,8 +2,8 @@ name: Meme Scanner
 
 on:
   schedule:
-    - cron: "*/10 * * * *"
-  workflow_dispatch: {}
+    - cron: "*/10 * * * *"  # every 10 minutes
+  workflow_dispatch: {}       # lets you run it manually from the Actions tab
 
 permissions:
   contents: write
@@ -13,20 +13,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+
       - run: pip install -r requirements.txt
+
       - name: Run scanner
         env:
           HELIUS_API_KEY: ${{ secrets.HELIUS_API_KEY }}
           TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
           TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
         run: python scanner.py
+
       - name: Commit updated sent-tokens list
-        run: |
-          git config user.name "meme-scanner-bot"
-          git config user.email "actions@github.com"
-          git add data/sent_tokens.json
-          git diff --staged --quiet || git commit -m "update sent tokens [skip ci]"
-          git push
+        run: | git config user.name "meme-scanner-bot" git config user.email "actions@github.com" git add data/sent_tokens.json git diff --staged --quiet || git commit -m "update sent tokens [skip ci]" git pull --rebase origin main git push
