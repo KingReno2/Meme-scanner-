@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 
 # ---------- CONFIG (edit these to tune the filter) ----------
 MIN_MCAP = 35_000
-MAX_MCAP = 500_000
+MAX_MCAP = 50_000
 MIN_LIQUIDITY = 5_000
 MIN_AGE_HOURS = 1
 MAX_AGE_HOURS = 48
@@ -95,7 +95,12 @@ def score_token(pair, rug_report):
     hard_fail = False
 
     liquidity = (pair.get("liquidity") or {}).get("usd", 0) or 0
-    mcap = pair.get("marketCap") or pair.get("fdv") or 0
+    real_mcap = pair.get("marketCap")
+    fdv = pair.get("fdv")
+    used_fdv_fallback = not real_mcap and fdv
+    mcap = real_mcap or fdv or 0
+    if used_fdv_fallback:
+        reasons["mcap_is_fdv_fallback"] = True
     volume24 = (pair.get("volume") or {}).get("h24", 0) or 0
     created_ms = pair.get("pairCreatedAt")
     age_hours = None
@@ -124,7 +129,10 @@ def score_token(pair, rug_report):
 
     # mcap position — reward lower end of range (more upside room) (0-15)
     mcap_position = 1 - ((mcap - MIN_MCAP) / (MAX_MCAP - MIN_MCAP))
-    score += mcap_position * 15
+    mcap_score = mcap_position * 15
+    if used_fdv_fallback:
+        mcap_score *= 0.5  # FDV is a weaker signal than real circulating mcap
+    score += mcap_score
 
     # volume/liquidity ratio — organic trading activity (0-20)
     if liquidity > 0:
@@ -184,6 +192,8 @@ def format_alert(token_address, pair, score, reasons):
         flags.append("⚠️ top10 holders >50%")
     if reasons.get("rugcheck_unavailable"):
         flags.append("⚠️ rugcheck data unavailable")
+    if reasons.get("mcap_is_fdv_fallback"):
+        flags.append("⚠️ mcap shown is FDV (fully diluted), not circulating — real mcap unavailable, treat this number as an upper bound, not what's actually trading")
     flags_text = "\n".join(flags) if flags else "✅ no red flags found"
 
     msg = (
@@ -257,3 +267,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    
